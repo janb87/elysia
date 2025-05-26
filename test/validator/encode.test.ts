@@ -116,4 +116,71 @@ describe('Encode response', () => {
 		expect(response.status).toBe(200)
 		expect(await response.json()).toEqual({ value: '1.1' })
 	})
+
+	it('handles intersection types in array', async () => {
+		const StringifiedBigInt = () =>
+			t
+				.Transform(t.String())
+				.Decode((value) => BigInt(value))
+				.Encode((value) => {
+					return value.toString()
+				})
+
+		const EthereumAddress = () =>
+			t
+				.Transform(t.String())
+				.Decode((value) => {
+					return `0x${value}`
+				})
+				.Encode((value) => {
+					return value
+				})
+
+		const app = new Elysia({
+			encodeSchema: true
+		}).get(
+			'/',
+			() => [
+				{
+					id: 'f39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+					totalSupply: BigInt(1),
+					internalId: '1'
+				},
+				{
+					id: '70997970C51812dc3A010C7d01b50e0d17dc79C8',
+					totalSupply: BigInt(2),
+					internalId: '2'
+				}
+			],
+			{
+				response: {
+					200: t.Array(
+						t.Intersect([
+							t.Object({
+								id: EthereumAddress(),
+								totalSupply: StringifiedBigInt()
+							}),
+							t.Object({
+								id: EthereumAddress(),
+								internalId: t.String()
+							})
+						])
+					)
+				}
+			}
+		)
+		const response = await app.handle(req('/')).then((x) => x.json())
+		expect(response).toEqual([
+			{
+				id: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
+				totalSupply: '1',
+				internalId: '1'
+			},
+			{
+				id: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+				totalSupply: '2',
+				internalId: '2'
+			}
+		])
+	})
 })
